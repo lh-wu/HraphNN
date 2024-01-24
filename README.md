@@ -36,5 +36,5 @@ The configuration example for preprocessing data using DPABI is shown in the fil
 python train_eval_HraphNN.py --train=1
 
 ### 2.Test
-python train_eval_HraphNN.py --train=0# HraphNN
+python train_eval_HraphNN.py --train=0
 
