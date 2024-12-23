@@ -4,6 +4,7 @@ import scipy.io as sio
 import torch.nn as nn
 from dataloader import *
 from opt import *
+from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import roc_auc_score, precision_recall_fscore_support
 from scipy.special import softmax
 from torch.nn.parameter import Parameter
@@ -41,7 +42,7 @@ def build_hg_for_intra_subj(feature):
     return hg_list
 
 
-def similar_metric_learn(phonetic_data,y=None):
+def similar_metric_learn(phonetic_data):
     # phonetic_data——0age 1gender 2edu 3marry 4home 5eth 6race
     idx=[0,1,2]
     X=phonetic_data[:,idx]
@@ -186,28 +187,28 @@ def train():
 
         HGnn.eval()
         with torch.set_grad_enabled(False):
-            test_x = HGnn(Tsel_feature, hg_list, group_hg,group_lplace)
-        logits_test = test_x[test_ind].detach().cpu().numpy()
-        label_test=label[test_ind].detach().cpu().numpy()
+            eval_x = HGnn(Tsel_feature, hg_list, group_hg,group_lplace)
+        logits_eval = eval_x[eval_ind].detach().cpu().numpy()
+        label_eval=label[eval_ind].detach().cpu().numpy()
 
-        correct_test, acc_test = accuracy(logits_test, label_test)
-        test_auc = auc(logits_test, label_test)
-        prf_test = prf(logits_test, label_test)
-        sesp=metrics(logits_test, label_test)
-        # print("Epoch: {},\ttest acc: {:.4f}".format(epoch, acc_test.item()))
-        if acc_test > acc and epoch > 5:
-            correct = correct_test
-            acc = acc_test
-            aucs[fold] = test_auc
-            prfs[fold] = prf_test
-            detail_acc[i][fold] = acc_test
+        correct_eval, acc_eval = accuracy(logits_eval, label_eval)
+        eval_auc = auc(logits_eval, label_eval)
+        prf_eval = prf(logits_eval, label_eval)
+        sesp=metrics(logits_eval, label_eval)
+
+        if acc_eval > acc and epoch > 5:
+            correct = correct_eval
+            acc = acc_eval
+            aucs[fold] = eval_auc
+            prfs[fold] = prf_eval
+            detail_acc[i][fold] = acc_eval
             sesps[fold]=sesp
             torch.save(HGnn, save_path+"/{}-{}.pkl".format(cur,fold))
 
     corrects[fold] = correct
     accs[fold] = acc
-    print("\r\n => Fold {} test accuacry {:.2f}%,correct num:{}".format(fold, acc * 100, correct))
-    print("\r\n => Fold {} test auc {:.2f}%".format(fold, aucs[fold] * 100))
+    print("\r\n => Fold {} eval accuacry {:.2f}%,correct num:{}".format(fold, acc * 100, correct))
+    print("\r\n => Fold {} eval auc {:.2f}%".format(fold, aucs[fold] * 100))
 
 
 
@@ -218,26 +219,26 @@ if __name__ == '__main__':
     opt = OptInit().initialize()
 
     feature, y, phonetic_data, pd_dict = get_data(kind="BOLD")
-    demo_sim = similar_metric_learn(phonetic_data, y)
+    demo_sim = similar_metric_learn(phonetic_data)
     save_path=opt.ckpt_path
     if not os.path.exists(save_path):
         os.mkdir(save_path)
     EPOCH = opt.num_iter
-    total_number = opt.loopNumber if opt.train else 1
+    loop_number = opt.loopNumber if opt.train else 1
     n_folds = opt.Kfold
     cv_splits = data_split(feature, y, n_folds)
 
-    multi_accs = np.zeros(total_number, dtype=np.float32)
-    multi_aucs = np.zeros(total_number, dtype=np.float32)
-    multi_sens = np.zeros(total_number, dtype=np.float32)
-    multi_spes = np.zeros(total_number, dtype=np.float32)
-    multi_f1s = np.zeros(total_number, dtype=np.float32)
+    multi_accs = np.zeros(loop_number, dtype=np.float32)
+    multi_aucs = np.zeros(loop_number, dtype=np.float32)
+    multi_sens = np.zeros(loop_number, dtype=np.float32)
+    multi_spes = np.zeros(loop_number, dtype=np.float32)
+    multi_f1s = np.zeros(loop_number, dtype=np.float32)
 
-    detail_acc = np.zeros((total_number, n_folds), dtype=np.float32)
+    detail_acc = np.zeros((loop_number, n_folds), dtype=np.float32)
 
-    eval_acc_auc_sen_spe_f1 = np.zeros((total_number, 5), dtype=np.float32)
+    eval_acc_auc_sen_spe_f1 = np.zeros((loop_number, 5), dtype=np.float32)
 
-    for i in range(total_number):
+    for i in range(loop_number):
         cur=i
         accs = np.zeros(n_folds, dtype=np.float32)
         aucs = np.zeros(n_folds, dtype=np.float32)
@@ -246,14 +247,20 @@ if __name__ == '__main__':
         corrects = np.zeros(n_folds, dtype=np.int32)
         for fold in range(n_folds):
             print("\r\n========================== Fold {} ==========================".format(fold))
-            train_ind = cv_splits[fold][0]
+            train_eval_ind = cv_splits[fold][0]
             test_ind = cv_splits[fold][1]
 
-            roi_sel = np.loadtxt("./featureSelection/aal/BOLD/kendall/ans.txt", dtype=np.int32)
+            inner_skf = StratifiedKFold(n_splits=9, shuffle=True, random_state=42)
+            train_eval_x, train_eval_y = feature[train_eval_ind], y[train_eval_ind]
+            inner_splits = list(skf.split(train_eval_x, train_eval_y))
+            train_ind = inner_splits[-1][0]
+            eval_ind = inner_splits[-1][1]
+
+            roi_sel = np.loadtxt("./featureSelection/aal/BOLD/kendall/ans{}.txt".format(fold), dtype=np.int32)
             roi_sel=roi_sel[0:opt.fRegion]
             roi_sel=np.sort(roi_sel)
             sel_feature=feature[:,roi_sel,:]
-            fea_sel = np.loadtxt("./featureSelection/aal/BOLD/lasso/ans.txt", dtype=np.int32)
+            fea_sel = np.loadtxt("./featureSelection/aal/BOLD/lasso/ans{}.txt".format(fold), dtype=np.int32)
             fea_sel=fea_sel[0:opt.fBOLD]
             fea_sel=np.sort(fea_sel)
             sel_feature=sel_feature[:,:,fea_sel]
@@ -272,8 +279,8 @@ if __name__ == '__main__':
             label = torch.tensor(y, dtype=torch.long).to(opt.device)
 
             def eval():
-                print("\tNumber of eval samples %d" % len(test_ind))
-                print("\tStart eval...\r\n")
+                print("\tNumber of test samples %d" % len(test_ind))
+                print("\tStart test...\r\n")
                 HGnn.eval()
                 test_x = HGnn(Tsel_feature, hg_list, group_hg, group_lplace)
                 logits_test = test_x[test_ind].detach().cpu().numpy()
@@ -298,14 +305,14 @@ if __name__ == '__main__':
         acc_nfold = np.sum(corrects) / feature.shape[0]
         auc_nfold = np.mean(aucs)
         print("=> Value format: mean(std)")
-        print("=> Average test accuracy in {}-fold CV: {:.4f}({:.4f})".format(n_folds, acc_nfold,np.std(accs)))
-        print("=> Average test auc in {}-fold CV: {:.4f}({:.4f})".format(n_folds, auc_nfold,np.std(aucs)))
+        print("=> Average eval accuracy in {}-fold CV: {:.4f}({:.4f})".format(n_folds, acc_nfold,np.std(accs)))
+        print("=> Average eval auc in {}-fold CV: {:.4f}({:.4f})".format(n_folds, auc_nfold,np.std(aucs)))
         pr, rc, f1 = np.mean(prfs, axis=0)
         std_p, std_r, std_f1 = np.std(prfs, axis=0)
         se,sp=np.mean(sesps,axis=0)
         std_se, std_sp = np.std(sesps, axis=0)
-        print("=> Average test precision {:.4f}({:.4f}), recall {:.4f}({:.4f}), F1-score {:.4f}({:.4f})".format(pr,std_p, rc,std_r, f1,std_f1))
-        print("=> Average test sen {:.4f}({:.4f}), spe {:.4f}({:.4f})".format(se,std_se,sp,std_sp))
+        print("=> Average eval precision {:.4f}({:.4f}), recall {:.4f}({:.4f}), F1-score {:.4f}({:.4f})".format(pr,std_p, rc,std_r, f1,std_f1))
+        print("=> Average eval sen {:.4f}({:.4f}), spe {:.4f}({:.4f})".format(se,std_se,sp,std_sp))
         multi_accs[i] = acc_nfold
         multi_aucs[i] = auc_nfold
         multi_sens[i] = se

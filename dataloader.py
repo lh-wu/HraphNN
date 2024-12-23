@@ -25,7 +25,7 @@ def get_subject_score(subject_list, score)->dict:
                 scores_dict[row['Subject ID']] = row[score]
     return scores_dict
 
-def get_subject_score2(subject_list,score):
+def get_subject_score_ABIDE(subject_list,score):
     scores_dict = {}
     phenotype = NIMGPATH
     with open(phenotype) as csv_file:
@@ -128,10 +128,14 @@ if __name__ == '__main__':
 
     for fold in range(n_folds):
         print("\r\n========================== Fold {} ==========================".format(fold))
-        train_ind = cv_splits[fold][0]
+        train_eval_ind = cv_splits[fold][0]
         test_ind = cv_splits[fold][1]
-        one_fold_fea_count = lasso_sel(feature, y, train_ind, test_ind,lamd=lmd)
-        # one_fold_fea_count = svm_sel_signal(feature, y, train_ind, test_ind)
+        inner_skf = StratifiedKFold(n_splits=9, shuffle=True, random_state=42)
+        train_eval_x, train_eval_y = feature[train_eval_ind], y[train_eval_ind]
+        inner_splits = list(skf.split(train_eval_x, train_eval_y))
+        train_ind = inner_splits[-1][0]
+
+        one_fold_fea_count = lasso_sel(feature, y, train_ind,lamd=lmd)
         ten_fold_fea_count=ten_fold_fea_count+one_fold_fea_count
     print("*"*100)
     print(ten_fold_fea_count)

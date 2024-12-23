@@ -2,7 +2,7 @@
 Code for "Hybrid region and population hypergraph neural network based on blood oxygenation level-dependent signal for mild cognitive impairment detection"
 
 ## Description
-![image](https://github.com/lh-wu/HraphNN/blob/main/misc/HraphNN.png)
+![image](https://github.com/lh-wu/HraphNN/edit/main/misc/HraphNN.png)
 <p align="center">Fig. 1. Framework of our proposed method</p>
 
 As is shown in Fig.1. , we propose a Hybrid Region and Population Hypergraph Neural Network (HraphNN) for MCI detection. Overall framework of the proposed HraphNN with three steps:(1) Region hypergraph construction conduct selection from the view of BOLD signal and brain region to retain informative signal and brain regions from rs-fMRI data. (2) Population hypergraph construction utilize an improved Large Margin Nerest Neighbor (iLMNN) module to attain the demographic correlation matrix S<sub>demo</sub>, which is integrated with imaging correlation matrix S<sub>img</sub> through multiplying a weighting parameter &lambda; to construct population hypergraph. (3) The proposed population-to-region hypergraph neural network, which conducts convolution from population hypergraph to region hypergraph, mainly consists of population message passing layer (PMP), region convolution layer (RC) and multi-layer perception (MLP), which is utilized to integrate the topological information from the population and brain regions, producing detection results for each subject.
@@ -36,5 +36,5 @@ The configuration example for preprocessing data using DPABI is shown in the fil
 python train_eval_HraphNN.py --train=1
 
 ### 2.Test
-python train_eval_HraphNN.py --train=0
+python train_eval_HraphNN.py --train=0# HraphNN
 
